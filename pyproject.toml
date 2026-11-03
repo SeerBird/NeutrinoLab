@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "NeutrinoLab"
 version = "0.0.1"
 description = "Meow meow"
-readme = "README.md"
 requires-python = ">=3.14"
 dependencies = []
 
