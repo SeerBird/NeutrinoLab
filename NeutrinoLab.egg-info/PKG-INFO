@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: NeutrinoLab
+Version: 0.0.1
+Summary: Meow meow
+Requires-Python: >=3.12
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: matplotlib
+Requires-Dist: zfit
+Requires-Dist: scikit-learn
+Requires-Dist: xgboost
+Requires-Dist: black
+Requires-Dist: pylint
