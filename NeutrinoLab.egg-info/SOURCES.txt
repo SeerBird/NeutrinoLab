@@ -1,6 +1,0 @@
-pyproject.toml
-NeutrinoLab.egg-info/PKG-INFO
-NeutrinoLab.egg-info/SOURCES.txt
-NeutrinoLab.egg-info/dependency_links.txt
-NeutrinoLab.egg-info/requires.txt
-NeutrinoLab.egg-info/top_level.txt

@@ -1,8 +1,0 @@
-numpy
-pandas
-matplotlib
-zfit
-scikit-learn
-xgboost
-black
-pylint
