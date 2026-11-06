@@ -9,7 +9,12 @@ def column(_name, dtype=float):
     return field(metadata={"column": _name, "dtype": dtype})
 
 
-@dataclass(eq=False)
+def derived():
+    """Dataclass field not read from the file: starts as None and is computed after loading"""
+    return field(default=None, metadata={"column": None})
+
+
+@dataclass(eq=False, kw_only=True)
 class RealData:
     """Class representing a list of events, with their relevant variables"""
 
@@ -33,12 +38,20 @@ class RealData:
     # unreliable in the EXT part of the simulation, and candidates are separated by other fields.
     length_momentum: np.ndarray = column("Muon momentum (length estimate)")
     scat_momentum: np.ndarray = column("Muon momentum (scattering estimate)")
+    n_tracks: np.ndarray | None = (
+        derived()
+    )  # Number of tracks in the candidate this row came from
 
     @classmethod
     def from_frame(cls, frame):
         """Build from a DataFrame, matching columns by name (column order doesn't matter)"""
-        return cls(**{f.name: frame[f.metadata["column"]].to_numpy(dtype=f.metadata["dtype"])
-                      for f in fields(cls)})
+        return cls(
+            **{
+                f.name: frame[f.metadata["column"]].to_numpy(dtype=f.metadata["dtype"])
+                for f in fields(cls)
+                if f.metadata["column"] is not None
+            }
+        )
 
     @classmethod
     def from_pickle(cls, path):
@@ -55,7 +68,12 @@ class RealData:
 
     def select(self, selection):
         """New instance with the boolean mask / index array applied to every field"""
-        return self.__class__(**{_name: _values[selection] for _name, _values in self.items()})
+        return self.__class__(
+            **{
+                _name: None if _values is None else _values[selection]
+                for _name, _values in self.items()
+            }
+        )
 
     @staticmethod
     def feature_names():
@@ -64,10 +82,15 @@ class RealData:
 
     def features(self):
         """(n_events, n_features) array of the real-data variables, ready for a fit"""
+        missing = [
+            _name for _name in self.feature_names() if getattr(self, _name) is None
+        ]
+        if missing:
+            raise ValueError(f"Derived features not computed yet: {missing}")
         return np.column_stack([getattr(self, _name) for _name in self.feature_names()])
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, kw_only=True)
 class SimData(RealData):
     category: np.ndarray = column("Simulation category", dtype=int)
     weight: np.ndarray = column("Simulation weight")
