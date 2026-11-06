@@ -1,101 +1,106 @@
 # First let's open the simulation file
-from dataclasses import dataclass
+import pickle
+from dataclasses import dataclass, field, fields
 
 import numpy as np
-from matplotlib import pyplot as plt
-import pickle
 import xgboost
+from matplotlib import pyplot as plt
 
 show = False
 
 
-@dataclass
+def column(_name, dtype=float):
+    """Dataclass field bound to a named column of the pickled DataFrame"""
+    return field(metadata={"column": _name, "dtype": dtype})
+
+
+@dataclass(eq=False)
 class RealData:
-    closest_ray_track_dist: np.ndarray
-    lepton_track_length: np.ndarray
-    longest_track_dist: np.ndarray
-    muon_ML_score: np.ndarray
-    end_z: np.ndarray
-    end_y: np.ndarray
-    end_x: np.ndarray
-    track_ML_score: np.ndarray
-    particle_mu_LLH: np.ndarray
-    start_z: np.ndarray
-    start_y: np.ndarray
-    start_x: np.ndarray
-    vert_x: np.ndarray
-    vert_y: np.ndarray
-    vert_z: np.ndarray
-    energy: np.ndarray
-    subevent: np.ndarray
-    length_momentum: np.ndarray
-    scat_momentum: np.ndarray
+    """Class representing a list of events, with their relevant variables"""
 
-    def array(self):
-        result = []
-        for _attribute in dir(self):
-            _dataset = self.__getattribute__(_attribute)
-            if isinstance(_dataset, np.ndarray):
-                result.append(_dataset)
-        return np.asarray(result)
+    closest_ray_track_dist: np.ndarray = column("Distance to closest cosmic ray track")
+    lepton_track_length: np.ndarray = column("Length of lepton track")
+    longest_track_dist: np.ndarray = column("Distance to longest track")
+    muon_ML_score: np.ndarray = column("Topological muon ML score")
+    track_ML_score: np.ndarray = column("Track vs shower ML score")
+    particle_mu_LLH: np.ndarray = column("Particle ID LLh")
+    start_x: np.ndarray = column("Start position of lepton track x component")
+    start_y: np.ndarray = column("Start position of lepton track y component")
+    start_z: np.ndarray = column("Start position of lepton track z component")
+    end_x: np.ndarray = column("End position of lepton track x component")
+    end_y: np.ndarray = column("End position of lepton track y component")
+    end_z: np.ndarray = column("End position of lepton track z component")
+    vert_x: np.ndarray = column("Interaction vertex position x component")
+    vert_y: np.ndarray = column("Interaction vertex position y component")
+    vert_z: np.ndarray = column("Interaction vertex position z component")
+    energy: np.ndarray = column("Total energy")
+    subevent: np.ndarray = column("Subevent", dtype=int)
+    length_momentum: np.ndarray = column("Muon momentum (length estimate)")
+    scat_momentum: np.ndarray = column("Muon momentum (scattering estimate)")
 
-    def size(self):
+    @classmethod
+    def from_frame(cls, frame):
+        """Build from a DataFrame, matching columns by name (column order doesn't matter)"""
+        return cls(**{f.name: frame[f.metadata["column"]].to_numpy(dtype=f.metadata["dtype"])
+                      for f in fields(cls)})
+
+    @classmethod
+    def from_pickle(cls, path):
+        with open(path, "rb") as infile:
+            return cls.from_frame(pickle.load(infile))
+
+    def __len__(self):
         return len(self.energy)
 
-    def select(self,selection):
-        return self.__class__(*self.array()[:, selection])
+    def items(self):
+        """(name, array) pairs for every field"""
+        return ((f.name, getattr(self, f.name)) for f in fields(self))
+
+    def select(self, selection):
+        """New instance with the boolean mask / index array applied to every field"""
+        return self.__class__(**{name: values[selection] for name, values in self.items()})
+
+    @staticmethod
+    def feature_names():
+        """Fields usable as fit inputs: those present in real data"""
+        return [f.name for f in fields(RealData)]
+
+    def features(self):
+        """(n_events, n_features) array of the real-data variables, ready for a fit"""
+        return np.column_stack([getattr(self, name) for name in self.feature_names()])
 
 
-
-@dataclass
+@dataclass(eq=False)
 class SimData(RealData):
-    category: np.ndarray
-    weight: np.ndarray
-    neutrino_energy: np.ndarray
-    neutrino_flight_dist: np.ndarray
-    muon_momentum: np.ndarray
+    category: np.ndarray = column("Simulation category", dtype=int)
+    weight: np.ndarray = column("Simulation weight")
+    neutrino_energy: np.ndarray = column("Simulated neutrino energy")
+    neutrino_flight_dist: np.ndarray = column("Simulated neutrino flight distance")
+    muon_momentum: np.ndarray = column("Simulated muon momentum")
+
+    def labels(self):
+        return self.category == 21
 
 
-
-
-with (open("data/Simulation.pkl", 'rb') as infile):
-    data = SimData(*np.asarray(pickle.load(infile).values.T, dtype=float))
-    subevent, category = np.asarray(data.subevent, dtype=int), np.asarray(data.category, dtype=int)
-
-
-
-'''
-# We can plot, for example, the simulated energy for the neutrino
-cosmic_events = category == 4
-a = data.muon_momentum[cosmic_events]
-e = data.energy[cosmic_events]
-a = a[e < 9000]
-print(f"Fraction of non-muon cosmic events:{
-np.count_nonzero(np.isnan(a))
-/ len(a)}")
-'''
+data = SimData.from_pickle("data/Simulation.pkl")
 data = data.select(data.energy < 9000)
-signal = data.category == 21
+signal = data.labels()
 if show:
-    for attribute in dir(data):
-        _set = data.__getattribute__(attribute)
-        if isinstance(_set, np.ndarray):
-            plt.hist(_set[signal], bins=200, density=False, label="Signal",
-                     weights=data.weight[signal])
-            plt.hist(_set[~signal], bins=200, density=False, label="Background",
-                     weights=data.weight[~signal])
-            plt.title(attribute)
-            plt.xlabel(f'Simulated {attribute}')
-            plt.legend()
-            plt.ylabel('N')
-            plt.show()
+    for name, values in data.items():
+        plt.hist(values[signal], bins=200, label="Signal", weights=data.weight[signal])
+        plt.hist(values[~signal], bins=200, label="Background", weights=data.weight[~signal])
+        plt.title(name)
+        plt.xlabel(f"Simulated {name}")
+        plt.ylabel("N")
+        plt.legend()
+        plt.show()
 
 train_fraction = 0.9
-train = np.random.random(data.size())<train_fraction
-train_sig = data.select(signal&train)
-train_bkg = data.select((~signal)&train)
-test_sig = data.select(signal&(~train))
-test_bkg = data.select((~signal)&(~train))
-model = xgboost.XGBClassifier(eval_metric='auc', early_stopping_rounds=50, n_estimators=1000,
+train = np.random.random(len(data)) < train_fraction
+train_data = data.select(train)
+test_data = data.select(~train)
+model = xgboost.XGBClassifier(eval_metric="auc", early_stopping_rounds=50, n_estimators=1000,
                               learning_rate=0.3, max_depth=60)
-model.fit(train_sig, train_bkg, eval_set=[(test_sig,test_bkg)])
+model.fit(train_data.features(),
+          train_data.labels(),
+          eval_set=[(test_data.features(), test_data.labels())])

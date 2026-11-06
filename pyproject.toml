@@ -3,7 +3,7 @@ name = "NeutrinoLab"
 version = "0.0.1"
 description = "Meow meow"
 requires-python = ">=3.12"
-dependencies = ["numpy","pandas","matplotlib","zfit","scikit-learn","xgboost","black","pylint"]
+dependencies = ["numpy","matplotlib","zfit","scikit-learn","xgboost","black","pylint"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
