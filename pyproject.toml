@@ -5,10 +5,14 @@ description = "Meow meow"
 requires-python = ">=3.12"
 dependencies = ["numpy", "matplotlib", "zfit", "scikit-learn", "xgboost", "black", "pylint"]
 
+# Only the dependencies are installed (pip install -e .); the code is imported from the repo root
+[tool.setuptools] # This is done to keep the github workflow from building the project as a full package
+py-modules = []
+
 [tool.black]
 line-length = 90
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
+testpaths = ["test"]
+python_files = ["*_test.py"]
 pythonpath = ["."]
